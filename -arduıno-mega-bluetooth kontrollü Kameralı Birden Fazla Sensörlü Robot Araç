@@ -1,0 +1,220 @@
+#include <Servo.h>
+Servo servo;
+int servoDegree = 0;
+
+#include "DHT.h"
+#define DHTPIN A0
+
+
+#define DHTTYPE DHT11
+#define ldrPin A1
+
+#define gasSensor A3
+
+DHT tempSensor(DHTPIN, DHTTYPE);
+
+/*timer interrupt variables*/
+int counter = 0;
+byte done = 0;
+
+/*define ultrasonic pins and variableds*/
+const int trigger_pin = 12;
+const int echo_pin = 8;
+
+#include <NewPing.h>
+#define Maks_distance 200
+NewPing ultrasonik(trigger_pin, echo_pin, Maks_distance);
+
+float timeUltrasonic;
+float distance;
+/*end*/
+
+/* defined the right motor control pins */
+const int  PIN_MOTOR_RIGHT_UP = 7;
+const int PIN_MOTOR_RIGHT_DN = 6;
+
+/* defined the left motor control pins */
+const int  PIN_MOTOR_LEFT_UP = 5;
+const int PIN_MOTOR_LEFT_DN = 4;
+
+/* defined motors speed control pins */
+const int  PIN_MOTOR_LEFT_SPEED = 9;
+const int PIN_MOTOR_RIGHT_SPEED = 10;
+
+
+void setup()
+{
+
+  pinMode(echo_pin,INPUT);
+  pinMode(trigger_pin,OUTPUT);
+  
+  Serial.begin(9600);//Serial start
+  servo.attach(11);  
+  tempSensor.begin(); //dht11 start
+  while (!Serial);
+
+  /* initialization pins L298N*/
+  pinMode (PIN_MOTOR_RIGHT_UP, OUTPUT);
+  pinMode (PIN_MOTOR_RIGHT_DN, OUTPUT);
+  pinMode (PIN_MOTOR_LEFT_UP, OUTPUT);
+  pinMode (PIN_MOTOR_LEFT_DN, OUTPUT);
+  pinMode (PIN_MOTOR_LEFT_SPEED, OUTPUT);
+  pinMode (PIN_MOTOR_RIGHT_SPEED, OUTPUT);
+
+  // TODO you setup code
+    cli();
+    //timer3 1 Hz' eayarlanıyor
+    TCCR3A = 0;// TCCR3A register 0'lanıyor
+    TCCR3B = 0;// TCCR3B register 0'lanıyor
+    TCNT3  = 0;//sayac değeri  0'la
+  //OCR3A karşılaştırma registeri 1Hz değer için ayarlanıyor
+  //16 MHz osilatör,1Hz timer3 ın çalışma frekansı,1024 prescalar
+    OCR3A = 15624;// = (16*10^6) / (0.5*1024) - 1 (değer 65536 dan küçük)
+  //   CTC mod açılıyor.
+    TCCR3B |= (1 << WGM32);
+  //   CS30 ve CS32 bitleri 1024 prescaler için ayarlanıyor
+    TCCR3B |= (1 << CS32) | (1 << CS30);  
+  // timer karşılaştırma interruptı aktifleştiriliyor
+    TIMSK3 |= (1 << OCIE3A);
+ 
+    //interreuptlar aktif
+    sei();
+
+}
+
+void loop()
+{
+  if(Serial.available()){
+    char inChar = (char)Serial.read();
+    
+    if(inChar == 'F'){ //move forward(all motors rotate in forward direction)
+      forward();    
+    }
+    else if(inChar == 'G'){ //move reverse (all motors rotate in reverse direction)
+      back();     
+    }
+    else if(inChar == 'R'){ //turn right (left side motors rotate in forward direction, right side motors doesn't rotate
+    right();
+    }
+    else if(inChar == 'L'){ //turn left (right side motors rotate in forward direction, left side motors doesn't rotate)
+    left();    
+    }
+    else if(inChar == 'S'){ //STOP (all motors stop)
+    stopCar();
+    }
+
+    if('l' == inChar){
+      ldr();
+    }
+    if('t' == inChar){
+      temp();
+    }
+    if('u' == inChar){
+      ultrasonic();
+    }
+  }
+
+
+  
+  if(done == 1){/* print the information since 5sc*/    
+   Serial.println("********************");  
+   ldr();
+   temp();
+   ultrasonic();
+   gas();
+   Serial.print("********************");  
+   Serial.println();
+   servo.write(servoDegree);
+   done = 0; 
+  }
+
+
+}
+void ldr(){
+  int ldrVal = map(analogRead(ldrPin) , 366, 1018, 0, 499);
+  Serial.print("light: ");
+  Serial.print(ldrVal);
+  Serial.println();
+}
+void temp(){
+  float humadity = tempSensor.readHumidity();//humadity read
+  float temp = tempSensor.readTemperature();//temp read
+  float f = tempSensor.readTemperature(true);
+
+  Serial.print("Nem: ");
+  Serial.print(humadity);
+  Serial.println(" %");
+  Serial.print("Temperature: ");
+  Serial.print(temp);
+  Serial.println(" *C ");
+  Serial.print(f);
+  Serial.println(" *F");
+
+}
+void gas(){
+  Serial.print("Gas level: ");
+  Serial.print(analogRead(gasSensor));
+  Serial.println();
+}
+void ultrasonic(){
+  digitalWrite(trigger_pin,HIGH);
+  delayMicroseconds(1000);
+  digitalWrite(trigger_pin,LOW);
+
+  timeUltrasonic = pulseIn(echo_pin , HIGH);
+  distance = (timeUltrasonic/2) / 29.1 ;
+
+  Serial.print("distance : ");
+  Serial.println(distance);
+}
+
+ISR(TIMER3_COMPA_vect){
+  counter++;
+  if(counter == 5){
+    done = 1;
+    counter = 0;
+    if(servoDegree == 0){
+      servoDegree = 110;
+    }else{
+      servoDegree = 0;
+    }
+  }
+}
+void forward(){
+    analogWrite(9,255);
+    analogWrite(10,255);
+    digitalWrite(PIN_MOTOR_RIGHT_UP,HIGH);
+    digitalWrite(PIN_MOTOR_LEFT_UP,HIGH);
+    digitalWrite(PIN_MOTOR_LEFT_DN,LOW);
+    digitalWrite(PIN_MOTOR_RIGHT_DN,LOW);  
+}
+void back(){
+    analogWrite(9,255);
+    analogWrite(10,255);
+    digitalWrite(PIN_MOTOR_RIGHT_UP,LOW);
+    digitalWrite(PIN_MOTOR_LEFT_UP,LOW);
+    digitalWrite(PIN_MOTOR_LEFT_DN,HIGH);
+    digitalWrite(PIN_MOTOR_RIGHT_DN,HIGH);
+}
+void left(){
+    analogWrite(9,255);
+    analogWrite(10,255);    
+    digitalWrite(PIN_MOTOR_RIGHT_UP,HIGH);
+    digitalWrite(PIN_MOTOR_LEFT_UP,LOW);
+    digitalWrite(PIN_MOTOR_LEFT_DN,HIGH);
+    digitalWrite(PIN_MOTOR_RIGHT_DN,LOW); 
+}
+void right(){
+    analogWrite(9,255);
+    analogWrite(10,255);     
+    digitalWrite(PIN_MOTOR_RIGHT_UP,LOW);
+    digitalWrite(PIN_MOTOR_LEFT_UP,HIGH);
+    digitalWrite(PIN_MOTOR_LEFT_DN,LOW);
+    digitalWrite(PIN_MOTOR_RIGHT_DN,HIGH);
+}
+void stopCar(){
+    digitalWrite(PIN_MOTOR_RIGHT_UP,LOW);
+    digitalWrite(PIN_MOTOR_LEFT_UP,LOW);
+    digitalWrite(PIN_MOTOR_LEFT_DN,LOW);
+    digitalWrite(PIN_MOTOR_RIGHT_DN,LOW);
+}
