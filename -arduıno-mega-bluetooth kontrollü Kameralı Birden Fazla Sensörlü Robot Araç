@@ -1,33 +1,30 @@
+/* servo defination*/
 #include <Servo.h>
 Servo servo;
 int servoDegree = 0;
 
+/*temperature defination*/
 #include "DHT.h"
 #define DHTPIN A0
-
-
 #define DHTTYPE DHT11
+
+
+/*LDR defination*/
 #define ldrPin A1
 
-#define gasSensor A3
-
+/*temperature defination*/
+#define gasSensor A2
 DHT tempSensor(DHTPIN, DHTTYPE);
 
 /*timer interrupt variables*/
 int counter = 0;
 byte done = 0;
 
-/*define ultrasonic pins and variableds*/
+/*ultrasonic defination*/
 const int trigger_pin = 12;
 const int echo_pin = 8;
-
-#include <NewPing.h>
-#define Maks_distance 200
-NewPing ultrasonik(trigger_pin, echo_pin, Maks_distance);
-
 float timeUltrasonic;
 float distance;
-/*end*/
 
 /* defined the right motor control pins */
 const int  PIN_MOTOR_RIGHT_UP = 7;
@@ -41,15 +38,19 @@ const int PIN_MOTOR_LEFT_DN = 4;
 const int  PIN_MOTOR_LEFT_SPEED = 9;
 const int PIN_MOTOR_RIGHT_SPEED = 10;
 
+/* car gear defination*/
+int gear = 1;
+int motorSpeed = 50;
+
 
 void setup()
 {
-
+  /*ultrasonic pinmode*/
   pinMode(echo_pin,INPUT);
   pinMode(trigger_pin,OUTPUT);
   
   Serial.begin(9600);//Serial start
-  servo.attach(11);  
+  servo.attach(11);//servo start  
   tempSensor.begin(); //dht11 start
   while (!Serial);
 
@@ -61,11 +62,11 @@ void setup()
   pinMode (PIN_MOTOR_LEFT_SPEED, OUTPUT);
   pinMode (PIN_MOTOR_RIGHT_SPEED, OUTPUT);
 
-  // TODO you setup code
+  /* TIMER3 INTERRUPT DEFINATION*/
     cli();
-    //timer3 1 Hz' eayarlanıyor
-    TCCR3A = 0;// TCCR3A register 0'lanıyor
-    TCCR3B = 0;// TCCR3B register 0'lanıyor
+    //timer3 1 Hz'
+    TCCR3A = 0;// TCCR3A register 0
+    TCCR3B = 0;// TCCR3B register 0
     TCNT3  = 0;//sayac değeri  0'la
   //OCR3A karşılaştırma registeri 1Hz değer için ayarlanıyor
   //16 MHz osilatör,1Hz timer3 ın çalışma frekansı,1024 prescalar
@@ -90,19 +91,29 @@ void loop()
     if(inChar == 'F'){ //move forward(all motors rotate in forward direction)
       forward();    
     }
-    else if(inChar == 'G'){ //move reverse (all motors rotate in reverse direction)
+    else if(inChar == 'B'){ //move reverse (all motors rotate in reverse direction)
       back();     
     }
     else if(inChar == 'R'){ //turn right (left side motors rotate in forward direction, right side motors doesn't rotate
-    right();
+     right();
     }
     else if(inChar == 'L'){ //turn left (right side motors rotate in forward direction, left side motors doesn't rotate)
-    left();    
+     left();    
     }
     else if(inChar == 'S'){ //STOP (all motors stop)
-    stopCar();
+     stopCar();
+    }else if(distance <= 5.00){
+     stopCar();
+    }
+    
+    if(inChar == 'G'){
+      motorSpeed += 50;
+      if(motorSpeed > 255){
+        motorSpeed = 50 ;
+      }
     }
 
+    
     if('l' == inChar){
       ldr();
     }
@@ -111,6 +122,9 @@ void loop()
     }
     if('u' == inChar){
       ultrasonic();
+    }
+    if('g' == inChar){
+      gas();
     }
   }
 
@@ -134,6 +148,12 @@ void ldr(){
   int ldrVal = map(analogRead(ldrPin) , 366, 1018, 0, 499);
   Serial.print("light: ");
   Serial.print(ldrVal);
+  
+  if(ldrVal <= 120){
+    Serial.print(" dark");
+  }else{
+    Serial.print(" normal");
+  }
   Serial.println();
 }
 void temp(){
@@ -152,8 +172,17 @@ void temp(){
 
 }
 void gas(){
-  Serial.print("Gas level: ");
-  Serial.print(analogRead(gasSensor));
+  
+  float gasRate = analogRead(gasSensor);
+ 
+  Serial.print("gas rate = ");
+  Serial.print(gasRate);
+
+  if(gasRate >= 400){
+    Serial.print(" dangerous rate");
+  }else{
+    Serial.print(" normal rate");
+  }
   Serial.println();
 }
 void ultrasonic(){
@@ -165,7 +194,9 @@ void ultrasonic(){
   distance = (timeUltrasonic/2) / 29.1 ;
 
   Serial.print("distance : ");
-  Serial.println(distance);
+  Serial.print(distance);
+  Serial.print(" cm");
+  Serial.println();
 }
 
 ISR(TIMER3_COMPA_vect){
@@ -181,32 +212,32 @@ ISR(TIMER3_COMPA_vect){
   }
 }
 void forward(){
-    analogWrite(9,255);
-    analogWrite(10,255);
+    analogWrite(PIN_MOTOR_LEFT_SPEED,motorSpeed);
+    analogWrite(PIN_MOTOR_RIGHT_SPEED,motorSpeed);
     digitalWrite(PIN_MOTOR_RIGHT_UP,HIGH);
     digitalWrite(PIN_MOTOR_LEFT_UP,HIGH);
     digitalWrite(PIN_MOTOR_LEFT_DN,LOW);
     digitalWrite(PIN_MOTOR_RIGHT_DN,LOW);  
 }
 void back(){
-    analogWrite(9,255);
-    analogWrite(10,255);
+    analogWrite(PIN_MOTOR_LEFT_SPEED,motorSpeed);
+    analogWrite(PIN_MOTOR_RIGHT_SPEED,motorSpeed);
     digitalWrite(PIN_MOTOR_RIGHT_UP,LOW);
     digitalWrite(PIN_MOTOR_LEFT_UP,LOW);
     digitalWrite(PIN_MOTOR_LEFT_DN,HIGH);
     digitalWrite(PIN_MOTOR_RIGHT_DN,HIGH);
 }
 void left(){
-    analogWrite(9,255);
-    analogWrite(10,255);    
+    analogWrite(PIN_MOTOR_LEFT_SPEED,motorSpeed);
+    analogWrite(PIN_MOTOR_RIGHT_SPEED,motorSpeed);    
     digitalWrite(PIN_MOTOR_RIGHT_UP,HIGH);
     digitalWrite(PIN_MOTOR_LEFT_UP,LOW);
     digitalWrite(PIN_MOTOR_LEFT_DN,HIGH);
     digitalWrite(PIN_MOTOR_RIGHT_DN,LOW); 
 }
 void right(){
-    analogWrite(9,255);
-    analogWrite(10,255);     
+    analogWrite(PIN_MOTOR_LEFT_SPEED,motorSpeed);
+    analogWrite(PIN_MOTOR_RIGHT_SPEED,motorSpeed);     
     digitalWrite(PIN_MOTOR_RIGHT_UP,LOW);
     digitalWrite(PIN_MOTOR_LEFT_UP,HIGH);
     digitalWrite(PIN_MOTOR_LEFT_DN,LOW);
